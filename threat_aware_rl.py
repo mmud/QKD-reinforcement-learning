@@ -233,6 +233,7 @@ def train_penalty_sweep(
         "test_budget_used": float(test.attack_budget_used.mean()),
         "test_pool_fraction": float(test.mean_pool_fraction.mean()),
         "test_overhead": float(test.metadata_overhead.mean()),
+        "test_throughput_loss": float(test.metadata_throughput_loss.mean()),
         "model_path": selected["model_path"],
     }
     sweep = pd.DataFrame([{k: v for k, v in x.items() if k != "model"} for x in trained])
@@ -251,3 +252,38 @@ def evaluate_model_mismatch(train_cfg: SimConfig, test_cfg: SimConfig, model,
         metadata_visible=obs_mode in {"metadata", "metadata_pool"},
         pool_visible=obs_mode == "metadata_pool",
     )
+
+
+def train_adaptive_defense_sweep(
+    base_cfg: SimConfig,
+    defenses=("none", "constant_rate", "padding", "random_delay"),
+    seeds=(1, 2, 3),
+    detection_limit=0.05,
+    total_timesteps=100_000,
+    penalty_multipliers=DEFAULT_PENALTIES,
+    validation_episodes=100,
+    test_episodes=200,
+    model_dir="models/threat_aware_defenses",
+    recurrent=False,
+):
+    """Retrain metadata PPO separately for every defended traffic distribution."""
+    import pandas as pd
+
+    rows, models = [], {}
+    for defense in defenses:
+        defended_cfg = replace(base_cfg, defense_mode=defense)
+        for seed in seeds:
+            model, result, penalty_df = train_penalty_sweep(
+                defended_cfg, obs_mode="metadata", seed=seed,
+                detection_limit=detection_limit,
+                total_timesteps=total_timesteps,
+                penalty_multipliers=penalty_multipliers,
+                validation_episodes=validation_episodes,
+                test_episodes=test_episodes,
+                recurrent=recurrent,
+                model_dir=Path(model_dir) / defense,
+            )
+            result["defense"] = defense
+            rows.append(result)
+            models[(defense, seed)] = model
+    return pd.DataFrame(rows), models

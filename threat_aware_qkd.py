@@ -130,14 +130,17 @@ class AvailabilityEnv:
         mode = self.cfg.defense_mode
         if mode == "none":
             self.last_metadata_overhead = 0.0
+            self.last_metadata_throughput_loss = 0.0
             return count
         if mode == "constant_rate":
             target = max(0, int(self.cfg.target_rate))
             self.last_metadata_overhead = max(0, target - count) / max(target, 1)
+            self.last_metadata_throughput_loss = max(0, count - target) / max(count, 1)
             return target
         if mode == "padding":
             cover = int(self.rng.poisson(self.cfg.cover_rate))
             self.last_metadata_overhead = cover / max(count + cover, 1)
+            self.last_metadata_throughput_loss = 0.0
             return count + cover
         if mode == "random_delay":
             p = float(np.clip(self.cfg.delay_probability, 1e-6, 1.0))
@@ -148,6 +151,7 @@ class AvailabilityEnv:
             self.pending_metadata = [(dispatch, origin) for dispatch, origin in self.pending_metadata if dispatch > self.t]
             self.last_metadata_latency = float(np.mean([self.t - origin for _, origin in due])) if due else 0.0
             self.last_metadata_overhead = 0.0
+            self.last_metadata_throughput_loss = 0.0
             return len(due)
         raise ValueError(f"unknown defense mode: {mode}")
 
@@ -208,6 +212,7 @@ class AvailabilityEnv:
             "round": self.t, "state": self.state, "metadata_count": self.current_metadata,
             "true_metadata_count": self.last_true_metadata,
             "metadata_overhead": self.last_metadata_overhead,
+            "metadata_throughput_loss": self.last_metadata_throughput_loss,
             "metadata_latency": self.last_metadata_latency,
             "demand": demand, "attack_fraction": f, "true_qber": true_qber,
             "qber_hat": qhat, "cusum": self.cusum, "generated_bits": generated,
@@ -378,6 +383,7 @@ def run_episode(cfg: SimConfig, policy, seed: int, metadata_visible: bool = True
         "pool_overflow": float(sum(r["pool_overflow"] for r in log)),
         "mean_attack": float(np.mean([r["attack_fraction"] for r in log])),
         "metadata_overhead": float(np.mean([r["metadata_overhead"] for r in log])),
+        "metadata_throughput_loss": float(np.mean([r["metadata_throughput_loss"] for r in log])),
         "metadata_latency": float(np.mean([r["metadata_latency"] for r in log])),
     }, log)
 
