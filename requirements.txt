@@ -17,3 +17,4 @@ tensorboard>=2.15
 # ---- Nice-to-haves ----
 seaborn>=0.13
 tqdm>=4.66
+sb3-contrib>=2.6,<3
